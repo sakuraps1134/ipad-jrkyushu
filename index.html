@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+      <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="知らせる君">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/icon.png">
+    <title>JR九州 知らせる君</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #000; color: #fff; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; margin:0; height:100dvh; }
+        .rounded-btn { border-radius: 8px; }
+        .staff-scroll { flex: 1; overflow-y: auto; }
+        
+        /* 時計の小型化 */
+       .clock-text { font-family: 'Inter', Courier, Inter; font-weight: 800; font-size: 2.5rem; letter-spacing: -2px; }
+        
+        /* 駅名表示の最適化 */
+        #current-station { 
+            white-space: nowrap; 
+            display: inline-block;
+            font-size: clamp(2rem, 10vw, 5rem); 
+        }
+
+        /* ボタンと情報のレイアウト */
+        .control-panel {
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
+        .info-box { font-size: 0.85rem; line-height: 1.2; text-align: left; min-width: 70px; }
+        .control-btn { 
+            width: 55px; height: 60px; 
+            font-size: 0.8rem; line-height: 1.1; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+        /* 起動画面 */
+
+.app-title {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.app-title-main {
+    font-size: 0.9rem;
+    color: #888;
+    letter-spacing: 6px;
+    margin-bottom: 4px;
+}
+
+.app-title-sub {
+    font-size: 2.8rem;
+    font-weight: 900;
+    color: #f5c400;
+    letter-spacing: 1px;
+}
+
+.title-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.version-text {
+    position: absolute;
+    right: -40px;
+    bottom: 4px;
+    color: #777;
+    font-size: 0.7rem;
+    font-weight: normal;
+}
+
+.menu-clock {
+    text-align: center;
+    color: #888;
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+}
+
+.menu-card {
+    background: #111;
+    border: 2px solid #333;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 0 20px rgba(255,255,255,.08);
+}
+
+.menu-footer {
+    margin-top: 40px;
+    text-align: center;
+    color: #555;
+    font-size: 0.65rem;
+    letter-spacing: 0.5px;
+}
+.menu-label {
+    color: #aaa;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+    </style>
+</head>
+<body class="p-2">
+
+    <div id="setup-screen"
+     class="absolute inset-0 z-50 bg-gradient-to-b from-black via-gray-900 to-black p-6 flex flex-col justify-center max-w-md mx-auto">
+       <div class="app-title">
+
+    
+
+    <div class="app-title-main">
+    運転支援アプリ
+</div>
+
+<div class="title-wrapper">
+
+    <div class="app-title-sub">
+        知らせる君
+    </div>
+
+    <div class="version-text">
+        ver 1.0
+    </div>
+
+</div>
+
+</div>
+
+<div id="menu-clock" class="menu-clock">
+    00:00:00
+</div>
+
+<div class="menu-card">
+
+    <div class="menu-label">
+        列車番号を入力
+    </div>
+
+    <input
+        type="text"
+        id="train-num"
+        class="w-full p-4 bg-gray-800 text-white rounded mb-4 text-xl uppercase"
+        placeholder="">
+
+    <button
+        onclick="loadTimetable()"
+        class="w-full p-4 bg-blue-700 rounded-btn font-bold">
+
+        列車読み込み
+
+    </button>
+
+</div>
+
+<div id="station-select-area"
+     class="mt-4 hidden">
+
+    <select
+        id="station-list"
+        class="w-full p-4 bg-gray-800 text-white rounded mb-4 text-xl">
+    </select>
+
+    <button
+        onclick="startApp()"
+        class="w-full p-4 bg-yellow-600 rounded-btn font-bold">
+
+        運転開始
+
+    </button>
+
+</div>
+<div class="menu-footer">
+    Kyushu Railway Company. All Rights Reserved.
+</div>
+    </div>
+
+    <div id="run-screen" class="hidden flex flex-col h-full">
+
+<div id="stop-alert"
+     class="hidden absolute top-2 left-2 px-6 py-3
+       bg-red-600 text-white font-bold text-2xl
+       border-4 border-white rounded-lg z-50">
+    停車
+</div>
+
+        <div class="flex flex-col items-end mb-1">
+            <div id="clock" class="clock-text">00:00:00</div>
+            <div class="control-panel">
+                <div class="info-box">
+                    <div>GPS: ON</div>
+                    <div class="text-red-500 font-bold">車内放送: OFF</div>
+                    <div id="speed-display" class="font-bold text-white">0.0 km/h</div>
+                </div>
+               <div class="flex flex-col gap-1">
+
+    <div class="flex gap-1">
+
+        <button
+    id="audio-toggle-btn"
+    class="control-btn bg-red-700 rounded-btn font-bold"
+    onclick="toggleAudio()">
+
+    音声<br>ON
+
+</button>
+
+        <button
+            class="control-btn bg-blue-700 rounded-btn font-bold"
+            onclick="rollbackStation()">
+            戻し
+        </button>
+
+    </div>
+
+    <button
+        class="bg-orange-600 rounded-btn font-bold text-sm h-10"
+        onclick="finishRun()">
+
+        運転終了
+
+    </button>
+
+</div>
+            </div>
+        </div>
+
+        <div class="mb-1 shrink-0 -mt-7">
+            <p id="label-top" class="text-lg">ただいま</p>
+            <h2 id="current-station" class="text-yellow-400 font-bold leading-none">--</h2>
+            <p id="label-bottom" class="text-xl">停車中</p>
+        </div>
+
+        <div class="staff-scroll">
+            <img id="staff-img" src="" alt="スタフ画像" class="w-full h-auto">
+        </div>
+    </div>
+
+    <script>
+        let route = [];
+        let currentStationIndex = 0;
+        let isRunning = false;
+        let stationTypes = {};
+        let stopTimer = null; // GPSノイズ対策用
+        let stopAlertActive = false;
+        let fumikiriAudio = null;
+let trainNumGlobal = "";
+let stopAudioInterval = null;
+let trainCars = null;
+let stopAudio = null;
+let shingoAudio = null;
+let shingoInterval = null;
+let shingoTimeout = null;
+let audioEnabled = true;
+let startupTime = 0;
+const shingoStations = [
+    "門司","小倉","西小倉","スペースワールド","八幡","黒崎","陣原","折尾","遠賀川","海老津","赤間","東郷","福間","古賀","福工大前","香椎","千早","箱崎","吉塚","博多","竹下","南福岡","二日市","原田","基山","弥生が丘","田代","鳥栖","久留米","荒木","羽犬塚","瀬高","銀水","大牟田","荒尾","門司港","日田","天ヶ瀬","豊後森","由布院","向之原","大分"
+];
+
+        function getCleanName(name) { return (name || "--").split('[')[0].trim(); }
+        function startClock() {
+
+    setInterval(() => {
+
+        const now =
+            new Date().toLocaleTimeString('ja-JP');
+
+        const clock =
+            document.getElementById('clock');
+
+        if (clock) {
+            clock.innerText = now;
+        }
+
+        const menuClock =
+            document.getElementById('menu-clock');
+
+        if (menuClock) {
+            menuClock.innerText = now;
+        }
+
+    }, 1000);
+}
+        window.onload = startClock;
+
+        async function fetchAsText(url) {
+            const res = await fetch(url);
+            const buffer = await res.arrayBuffer();
+            try { return new TextDecoder('shift-jis', { fatal: true }).decode(buffer); } 
+            catch { return new TextDecoder('utf-8').decode(buffer); }
+        }
+
+        async function loadTimetable() {
+            const trainNum = document.getElementById('train-num').value.toUpperCase();
+            const data = await fetchAsText('https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/timetable.csv');
+            const select = document.getElementById('station-list');
+            select.innerHTML = '';
+            data.split('\n').forEach(row => {
+                const cols = row.split(',');
+                if (
+    cols[0]?.trim() === trainNum &&
+    cols[1] &&
+    cols[3]?.trim() !== '↓'
+)
+{
+                    const opt = document.createElement('option');
+                    opt.innerText = getCleanName(cols[1]);
+                    select.appendChild(opt);
+                }
+            });
+            document.getElementById('station-select-area').classList.remove('hidden');
+        }
+
+        async function startApp() {
+
+    stopStopAlert();
+    stopShingoBell();
+
+    const select = document.getElementById('station-list');
+            const trainNum = document.getElementById('train-num').value.toUpperCase();
+            trainNumGlobal = trainNum;
+            const selectedName = getCleanName(select.options[select.selectedIndex].text);
+
+            const carData = await fetchAsText(
+    'https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/carmaster.csv'
+);
+
+carData.split('\n').forEach(row => {
+    const cols = row.split(',');
+
+    if (cols[0]?.trim().toUpperCase() === trainNum) {
+        trainCars = cols[1]?.trim();
+    }
+});
+
+if (trainCars) {
+    stopAudio = new Audio(
+        `https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/${trainCars}car.mp3`
+    );
+
+    stopAudio.preload = "auto";
+    stopAudio.load();
+    updateAudioVolume();
+}
+
+shingoAudio = new Audio(
+    "https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/shingo.mp3"
+);
+
+shingoAudio.preload = "auto";
+shingoAudio.load();
+updateAudioVolume();
+fumikiriAudio = new Audio(
+    "https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/fumikiri.mp3"
+);
+
+fumikiriAudio.preload = "auto";
+fumikiriAudio.load();
+updateAudioVolume();
+            
+            const ttData = await fetchAsText('https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/timetable.csv');
+            route = []; stationTypes = {};
+            ttData.split('\n').forEach(row => {
+                const cols = row.split(',');
+               if (cols[0]?.trim() === trainNum && cols[1]) {
+                    const n = getCleanName(cols[1]);
+                    route.push(n);
+                    stationTypes[n] = (cols[3]?.trim() === '↓' ? 'pass' : 'stop');
+                }
+            });
+
+            const stData = await fetchAsText('https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/stationmaster.csv');
+            const masters = {};
+            stData.split('\n').forEach((row, i) => {
+                if (i === 0) return;
+                const cols = row.split(',');
+                if (cols[0]) masters[getCleanName(cols[0])] = { lon: parseFloat(cols[1]), lat: parseFloat(cols[2]) };
+            });
+
+            currentStationIndex = route.findIndex(n => n === selectedName);
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('run-screen').classList.remove('hidden');
+            startupTime = Date.now();
+            document.getElementById('staff-img').src = `https://raw.githubusercontent.com/sakuraps1134/ipad-jrkyushu/main/${trainNum}.png`;
+
+            updateStationName(route[currentStationIndex]);
+            document.getElementById('label-top').innerText = "ただいま";
+            document.getElementById('label-bottom').innerText = "停車中";
+            
+            
+            navigator.geolocation.watchPosition((pos) => {
+                const { latitude, longitude, speed } = pos.coords;
+                const kmh = (speed || 0) * 3.6;
+                document.getElementById('speed-display').innerText = `${kmh.toFixed(1)} km/h`;
+
+                if (kmh > 10) {
+
+    stopShingoBell();
+
+    isRunning = true;
+    stopTimer = null;
+}
+
+                if (isRunning) {
+                    // 「現在駅」のインデックスを維持しつつ、常に「次駅」を計算する
+                    let nextIndex = Math.min(currentStationIndex + 1, route.length - 1);
+                    const nextName = route[nextIndex];
+                    const prevName = route[currentStationIndex];
+
+                    let nextStopName = nextName;
+
+for (let i = nextIndex; i < route.length; i++) {
+    if (stationTypes[route[i]] !== 'pass') {
+        nextStopName = route[i];
+        break;
+    }
+}
+                    
+                    // 表示更新：常に「次」を表示
+                    updateStationName(nextStopName);
+                    
+                    const coords = masters[nextName];
+                    if (!coords) return;
+
+                 const dist = getDistance(
+    latitude,
+    longitude,
+    coords.lat,
+    coords.lon
+);
+
+const isNextPass =
+    stationTypes[nextName] === 'pass';
+
+if (
+    Date.now() - startupTime > 15000 &&
+    !isNextPass &&
+    dist <= 750 &&
+    kmh > 15 &&
+    !stopAlertActive
+) {
+    startStopAlert();
+}
+
+document.getElementById('label-top').innerText =
+    "次停車駅";
+
+document.getElementById('label-bottom').innerText =
+    `${prevName} → ${nextName}`;
+
+                    // 判定処理はそのまま
+                    if (isNextPass && dist < 150) {
+                        currentStationIndex = nextIndex;
+                    } else if (!isNextPass && kmh <= 10) {
+                        if (!stopTimer) {
+                            stopTimer = setTimeout(() => {
+
+    isRunning = false;
+
+    currentStationIndex = nextIndex;
+
+    updateStationName(
+        route[currentStationIndex]
+    );
+
+    document.getElementById('label-top').innerText =
+        "ただいま";
+
+    document.getElementById('label-bottom').innerText =
+    "停車中";
+
+startShingoBell(
+    route[currentStationIndex]
+);
+
+stopStopAlert();
+
+stopTimer = null;
+
+}, 7000);
+                        }
+                    } else {
+                        stopTimer = null;
+                    }
+                }
+            }, null, { enableHighAccuracy: true });
+            updateAudioVolume();
+
+           
+        }
+
+    function updateStationName(name) {
+    const el = document.getElementById('current-station');
+    const cleanName = getCleanName(name);
+
+    el.innerText = cleanName;
+
+    const len = cleanName.length;
+
+    if (len <= 2) {
+        el.style.fontSize = "3.5rem";
+    } else if (len <= 4) {
+        el.style.fontSize = "3.5rem";
+    } else if (len <= 6) {
+        el.style.fontSize = "2.8rem";
+    } else {
+        el.style.fontSize = "2.2rem";
+    }
+}
+
+function rollbackStation() {
+stopShingoBell();
+
+stopStopAlert();
+
+    if (currentStationIndex <= 0) return;
+
+    currentStationIndex--;
+
+    isRunning = false;
+
+    updateStationName(route[currentStationIndex]);
+
+    document.getElementById('label-top').innerText =
+        "ただいま";
+
+    document.getElementById('label-bottom').innerText =
+        "停車中";
+
+    stopTimer = null;
+}
+
+function finishRun() {
+stopShingoBell();
+
+stopStopAlert();
+
+    if (!confirm("運転を終了しますか？")) {
+        return;
+    }
+
+    route = [];
+    currentStationIndex = 0;
+    isRunning = false;
+    stationTypes = {};
+    stopTimer = null;
+
+    document.getElementById('run-screen')
+        .classList.add('hidden');
+
+    document.getElementById('setup-screen')
+        .classList.remove('hidden');
+
+    document.getElementById('train-num').value = '';
+
+    document.getElementById('station-list').innerHTML = '';
+
+    document.getElementById('station-select-area')
+        .classList.add('hidden');
+}
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2)**2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        function startStopAlert() {
+
+    if (stopAlertActive) return;
+
+    stopAlertActive = true;
+
+    document
+        .getElementById('stop-alert')
+        .classList.remove('hidden');
+
+    playStopAudio();
+
+    stopAudioInterval = setInterval(() => {
+        playStopAudio();
+    }, 10000);
+}
+
+function stopStopAlert() {
+
+    stopAlertActive = false;
+
+    document
+        .getElementById('stop-alert')
+        .classList.add('hidden');
+
+    if (stopAudioInterval) {
+        clearInterval(stopAudioInterval);
+        stopAudioInterval = null;
+    }
+}
+
+function playStopAudio() {
+
+    stopAudio.load();
+
+    stopAudio.currentTime = 0;
+
+    stopAudio.play().catch(err=>{
+        alert(err);
+    });
+}
+
+function startShingoBell(stationName) {
+
+    stopShingoBell();
+
+    const useFumikiri =
+        shouldUseFumikiri(stationName);
+
+    // 特例駅
+    if (useFumikiri) {
+
+        shingoTimeout = setTimeout(() => {
+
+            playFumikiriBell();
+
+            shingoInterval = setInterval(() => {
+
+                playFumikiriBell();
+
+            }, 120000);
+
+        }, 10000);
+
+        return;
+    }
+
+    // 通常駅
+    if (!shingoStations.includes(stationName)) {
+        return;
+    }
+
+    shingoTimeout = setTimeout(() => {
+
+        playShingoBell();
+
+        shingoInterval = setInterval(() => {
+
+            playShingoBell();
+
+        }, 120000);
+
+    }, 10000);
+}
+
+function stopShingoBell() {
+
+    if (shingoTimeout) {
+        clearTimeout(shingoTimeout);
+        shingoTimeout = null;
+    }
+
+    if (shingoInterval) {
+        clearInterval(shingoInterval);
+        shingoInterval = null;
+    }
+}
+
+function playShingoBell() {
+
+    if (!shingoAudio) return;
+
+    shingoAudio.pause();
+    shingoAudio.currentTime = 0;
+
+    shingoAudio.play().catch(() => {});
+}
+function playFumikiriBell() {
+
+    if (!fumikiriAudio) return;
+
+    fumikiriAudio.pause();
+    fumikiriAudio.currentTime = 0;
+
+    fumikiriAudio.play().catch(() => {});
+}
+function shouldUseFumikiri(stationName) {
+
+    const num = parseInt(
+        trainNumGlobal.replace(/\D/g, ''),
+        10
+    );
+
+    if (isNaN(num)) return false;
+
+    const isOdd = num % 2 === 1;
+
+    if (
+        isOdd &&
+        ["瀬高","二日市","南福岡"].includes(stationName)
+    ) {
+        return true;
+    }
+
+    if (
+        !isOdd &&
+        ["南福岡","海老津"].includes(stationName)
+    ) {
+        return true;
+    }
+
+    return false;
+}
+function toggleAudio() {
+
+    audioEnabled = !audioEnabled;
+
+    const btn =
+        document.getElementById(
+            "audio-toggle-btn"
+        );
+
+    if (audioEnabled) {
+
+        btn.innerHTML =
+            "音声<br>ON";
+
+        btn.classList.remove(
+            "bg-gray-600"
+        );
+
+        btn.classList.add(
+            "bg-red-700"
+        );
+
+    } else {
+
+        btn.innerHTML =
+            "音声<br>OFF";
+
+        btn.classList.remove(
+            "bg-red-700"
+        );
+
+        btn.classList.add(
+            "bg-gray-600"
+        );
+    }
+
+    updateAudioVolume();
+}
+function updateAudioVolume() {
+
+    const muted = !audioEnabled;
+
+    if (stopAudio) {
+        stopAudio.muted = muted;
+    }
+
+    if (shingoAudio) {
+        shingoAudio.muted = muted;
+    }
+
+    if (fumikiriAudio) {
+        fumikiriAudio.muted = muted;
+    }
+}
+    </script>
+</body>
+</html>
